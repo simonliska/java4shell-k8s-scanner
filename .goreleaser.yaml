@@ -1,0 +1,19 @@
+# Release: git tag v0.1.0 && git push --tags && GITHUB_TOKEN=... goreleaser release --clean
+# Then: scripts/krew-manifest.sh v0.1.0 > plugins/java4shell.yaml, commit and push.
+version: 2
+
+builds:
+  - main: ./cmd/kubectl-java4shell
+    binary: kubectl-java4shell
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags: ["-s -w -X main.version={{ .Tag }}"]
+
+archives:
+  - formats: [tar.gz]
+    name_template: "kubectl-java4shell_{{ .Os }}_{{ .Arch }}"
+    files: [LICENSE] # krew requires the license in the archive
+
+checksum:
+  name_template: checksums.txt

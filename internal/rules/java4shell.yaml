@@ -1,0 +1,47 @@
+# java4shell: heap overflow in HotSpot's AVX-512 VBMI Base64 decode intrinsic.
+#
+# Checked 2026-11-18:
+# - OpenJDK Vulnerability Advisory 2026/11/17: hotspot/compiler, CVSS 3.1 8.1
+#   (AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H). Affects 17, 21, 25, 27; NOT 8 or 11.
+#   Affected: 27.0.1.0.3, 25.0.5.0.3, 21.0.13.0.3, 17.0.21.0.3 "and earlier".
+# - Fixed builds are the ".1" releases (17.0.21.1 ...): the advisory says "fixed in this
+#   release" without numbers; the numbers come from adoptium/temurin#326.
+# - Lower bound 17.0.6: the AVX-512 Base64 decode intrinsic (JDK-8268276, jdk17u commit
+#   07050b000ce2) is in tag jdk-17.0.6-ga and not in jdk-17.0.5-ga.
+# - EOL lines 18-20, 22-24, 26 are not in the advisory (no fixes for EOL releases) but
+#   contain the intrinsic (added in JDK 18, openjdk/jdk c37988d0793b), so they count as affected.
+# - CPU condition (VBMI) and flag mitigations are not in the advisory: researcher
+#   write-ups, confirmed in the lab (the flag turns the intrinsic off at runtime).
+# - Not covered: Oracle Java SE 8u511b33-perf (Oracle-only build, not OpenJDK).
+# - Distro builds (Red Hat, Ubuntu) may backport the fix without changing the version.
+id: java4shell
+cve: CVE-2026-114938
+title: OpenJDK HotSpot AVX-512 VBMI Base64 decode heap overflow
+references:
+  - https://openjdk.org/groups/vulnerability/advisories/2026-11-17
+  - https://www.oracle.com/security-alerts/cspunov2026.html
+  - https://github.com/advisories/GHSA-6g7j-4xh3-xq2q
+
+# Only CPUs with this feature run the vulnerable code path.
+cpuFeature:
+  name: avx512vbmi                                     # as in /proc/cpuinfo
+  nodeLabel: feature.node.kubernetes.io/cpu-cpuid.AVX512VBMI  # set by Node Feature Discovery
+
+# Affected: from <= version < fixed. Empty "fixed" = no fixed release (EOL line).
+affected:
+  - {from: "17.0.6", fixed: "17.0.21.1"}
+  - {from: "18", fixed: ""}
+  - {from: "19", fixed: ""}
+  - {from: "20", fixed: ""}
+  - {from: "21", fixed: "21.0.13.1"}
+  - {from: "22", fixed: ""}
+  - {from: "23", fixed: ""}
+  - {from: "24", fixed: ""}
+  - {from: "25", fixed: "25.0.5.1"}
+  - {from: "26", fixed: ""}
+  - {from: "27", fixed: "27.0.1.1"}
+
+# Any one of these JVM flag values disables the vulnerable path.
+mitigations:
+  - {name: UseBASE64Intrinsics, equals: "false"}  # -XX:-UseBASE64Intrinsics (preferred, narrow)
+  - {name: UseAVX, below: 3}                      # -XX:UseAVX=2 (broader performance impact)

@@ -1,0 +1,123 @@
+# java4shell test workloads: 3 variants x 2 replicas, one replica per node
+# (t8i = VBMI, t3 = no VBMI), so every scanner outcome shows up once.
+#
+#   vuln            affected JDK, no mitigation     -> EXPOSED on t8i
+#   vuln-mitigated  affected JDK, flag via env      -> MITIGATED on t8i
+#   not-affected    17.0.5, just below the range    -> NOT AFFECTED
+#
+# No fixed Temurin build (x.y.z.1) is on Docker Hub yet (2026-11-18), hence 17.0.5.
+# The app only sleeps; it never runs the vulnerable code.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: java-lab
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: idle-app
+  namespace: java-lab
+data:
+  Main.java: |
+    public class Main {
+        public static void main(String[] args) throws Exception {
+            System.out.println("idle JVM up, java " + Runtime.version());
+            Thread.sleep(Long.MAX_VALUE);
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vuln
+  namespace: java-lab
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: vuln}
+  template:
+    metadata:
+      labels: {app: vuln}
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector: {matchLabels: {app: vuln}}
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: app
+          image: eclipse-temurin:21.0.13_9-jdk
+          command: ["java", "-Xmx128m", "-XX:+UseSerialGC", "/app/Main.java"]
+          resources:
+            requests: {cpu: 10m, memory: 128Mi}
+            limits: {memory: 320Mi}
+          volumeMounts:
+            - {name: app, mountPath: /app}
+      volumes:
+        - name: app
+          configMap: {name: idle-app}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vuln-mitigated
+  namespace: java-lab
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: vuln-mitigated}
+  template:
+    metadata:
+      labels: {app: vuln-mitigated}
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector: {matchLabels: {app: vuln-mitigated}}
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: app
+          image: eclipse-temurin:21.0.13_9-jdk
+          command: ["java", "-Xmx128m", "-XX:+UseSerialGC", "/app/Main.java"]
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:-UseBASE64Intrinsics"
+          resources:
+            requests: {cpu: 10m, memory: 128Mi}
+            limits: {memory: 320Mi}
+          volumeMounts:
+            - {name: app, mountPath: /app}
+      volumes:
+        - name: app
+          configMap: {name: idle-app}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: not-affected
+  namespace: java-lab
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: not-affected}
+  template:
+    metadata:
+      labels: {app: not-affected}
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector: {matchLabels: {app: not-affected}}
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: app
+          image: eclipse-temurin:17.0.5_8-jdk
+          command: ["java", "-Xmx128m", "-XX:+UseSerialGC", "/app/Main.java"]
+          resources:
+            requests: {cpu: 10m, memory: 128Mi}
+            limits: {memory: 320Mi}
+          volumeMounts:
+            - {name: app, mountPath: /app}
+      volumes:
+        - name: app
+          configMap: {name: idle-app}

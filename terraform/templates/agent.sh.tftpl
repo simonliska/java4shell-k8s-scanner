@@ -1,0 +1,29 @@
+#!/bin/bash
+# k3s agent bootstrap (rendered by Terraform). Log: /var/log/k3s-bootstrap.log
+set -euo pipefail
+exec > >(tee -a /var/log/k3s-bootstrap.log) 2>&1
+
+SERVER_URL="https://${server_ip}:6443"
+
+# Wait (up to ~10 min) for the server API; /cacerts needs no auth.
+for i in $(seq 1 60); do
+  if curl -sfk -o /dev/null "$SERVER_URL/cacerts"; then
+    break
+  fi
+  echo "waiting for k3s server ($i/60)..."
+  sleep 10
+done
+
+%{ if k3s_version != "" ~}
+export INSTALL_K3S_VERSION="${k3s_version}"
+%{ else ~}
+export INSTALL_K3S_CHANNEL="stable"
+%{ endif ~}
+export INSTALL_K3S_SKIP_SELINUX_RPM=true
+export K3S_URL="$SERVER_URL"
+export K3S_TOKEN="${k3s_token}"
+
+curl -sfL https://get.k3s.io | sh -s - agent \
+  --node-name k3s-agent-t3
+
+echo "k3s agent bootstrap done"

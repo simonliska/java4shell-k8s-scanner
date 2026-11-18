@@ -1,0 +1,45 @@
+#!/bin/bash
+# k3s server bootstrap (rendered by Terraform). Log: /var/log/k3s-bootstrap.log
+set -euo pipefail
+exec > >(tee -a /var/log/k3s-bootstrap.log) 2>&1
+
+# Public IP via IMDSv2, so the API cert is valid for kubectl from outside.
+IMDS_TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+PUBLIC_IP=$(curl -sf -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)
+
+# Node Feature Discovery via the k3s Helm controller: any manifest in this
+# directory is applied automatically once k3s is up (no helm/git needed).
+mkdir -p /var/lib/rancher/k3s/server/manifests
+cat > /var/lib/rancher/k3s/server/manifests/node-feature-discovery.yaml <<'EOF'
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: node-feature-discovery
+  namespace: kube-system
+spec:
+  repo: https://kubernetes-sigs.github.io/node-feature-discovery/charts
+  chart: node-feature-discovery
+%{ if nfd_chart_version != "" ~}
+  version: "${nfd_chart_version}"
+%{ endif ~}
+  targetNamespace: node-feature-discovery
+  createNamespace: true
+EOF
+
+%{ if k3s_version != "" ~}
+export INSTALL_K3S_VERSION="${k3s_version}"
+%{ else ~}
+export INSTALL_K3S_CHANNEL="stable"
+%{ endif ~}
+export INSTALL_K3S_SKIP_SELINUX_RPM=true # AL2023 has no k3s-selinux package; SELinux is permissive
+export K3S_TOKEN="${k3s_token}"
+
+# traefik/servicelb are not needed and cost RAM on a 2 GB node.
+curl -sfL https://get.k3s.io | sh -s - server \
+  --node-name k3s-server-t8i \
+  --tls-san "$PUBLIC_IP" \
+  --write-kubeconfig-mode 644 \
+  --disable traefik \
+  --disable servicelb
+
+echo "k3s server bootstrap done"

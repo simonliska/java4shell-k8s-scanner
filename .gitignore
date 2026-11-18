@@ -1,0 +1,25 @@
+# Terraform state holds IPs and the k3s token; never commit it
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+
+# Local settings (AWS_PROFILE etc.)
+.env
+
+# Lab access
+*.pem
+/kubeconfig*
+
+# Go build output
+/bin/
+/dist/
+
+.DS_Store
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Internal working notes
+handoff.md
