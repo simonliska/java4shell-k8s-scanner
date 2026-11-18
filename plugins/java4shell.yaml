@@ -1,0 +1,44 @@
+apiVersion: krew.googlecontainertools.github.com/v1alpha2
+kind: Plugin
+metadata:
+  name: java4shell
+spec:
+  version: v0.1.0
+  homepage: https://github.com/simonliska/java4shell-k8s-scanner
+  shortDescription: Find pods exposed to java4shell (CVE-2026-114938)
+  description: |
+    Reports which pods are actually exposed to java4shell (CVE-2026-114938):
+    an affected JDK on a node whose CPU has avx512vbmi, with no mitigation
+    flag set. Also flags pods that could be rescheduled onto such nodes.
+    Needs Node Feature Discovery in the cluster.
+  platforms:
+    - selector:
+        matchLabels: {os: linux, arch: amd64}
+      uri: https://github.com/simonliska/java4shell-k8s-scanner/releases/download/v0.1.0/kubectl-java4shell_linux_amd64.tar.gz
+      sha256: a9780b4d8e364f7edd18d758ef8470cb921a9376bf8e8470c4ed531c34a7b9d9
+      bin: kubectl-java4shell
+    - selector:
+        matchLabels: {os: linux, arch: arm64}
+      uri: https://github.com/simonliska/java4shell-k8s-scanner/releases/download/v0.1.0/kubectl-java4shell_linux_arm64.tar.gz
+      sha256: cd543eea6da82f506a74405aad9f3dad714c1354d2768d83f7b0189e570c5435
+      bin: kubectl-java4shell
+    - selector:
+        matchLabels: {os: darwin, arch: amd64}
+      uri: https://github.com/simonliska/java4shell-k8s-scanner/releases/download/v0.1.0/kubectl-java4shell_darwin_amd64.tar.gz
+      sha256: 780f684c86203a5b67861a497ba5cd2b5f30a5bc12f502a38d5ca5fe702f33d2
+      bin: kubectl-java4shell
+    - selector:
+        matchLabels: {os: darwin, arch: arm64}
+      uri: https://github.com/simonliska/java4shell-k8s-scanner/releases/download/v0.1.0/kubectl-java4shell_darwin_arm64.tar.gz
+      sha256: 2f1980b93e5b10f4d01b85543c29e36e2cb6ef67c22dab27600ae3532e96a6d8
+      bin: kubectl-java4shell
+    - selector:
+        matchLabels: {os: windows, arch: amd64}
+      uri: https://github.com/simonliska/java4shell-k8s-scanner/releases/download/v0.1.0/kubectl-java4shell_windows_amd64.tar.gz
+      sha256: 9492adf269d8ed6538716da6017f494987268da502d9ff75e8aa4237b2788272
+      bin: kubectl-java4shell.exe
+    - selector:
+        matchLabels: {os: windows, arch: arm64}
+      uri: https://github.com/simonliska/java4shell-k8s-scanner/releases/download/v0.1.0/kubectl-java4shell_windows_arm64.tar.gz
+      sha256: 10faeed50a4e2cdd8982f7cfe0ccf4333e68a51c6e35877a426b50ded1e78588
+      bin: kubectl-java4shell.exe
