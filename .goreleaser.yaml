@@ -1,5 +1,5 @@
-# Release: git tag v0.1.0 && git push --tags && GITHUB_TOKEN=... goreleaser release --clean
-# Then: scripts/krew-manifest.sh v0.1.0 > plugins/java4shell.yaml, commit and push.
+# Release: git tag v0.1.0 && git push --tags && GITHUB_TOKEN=$(gh auth token) goreleaser release --clean
+# Then: mkdir -p plugins && scripts/krew-manifest.sh v0.1.0 > plugins/java4shell.yaml, commit and push.
 version: 2
 
 builds:

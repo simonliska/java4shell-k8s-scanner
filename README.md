@@ -168,12 +168,12 @@ go build -o bin/kubectl-java4shell ./cmd/kubectl-java4shell
 The logic in [`internal/scan`](internal/scan) works on plain Kubernetes
 objects, so tests need no cluster.
 
-Release (needs [GoReleaser](https://goreleaser.com/) and a GitHub token):
+Release (needs [GoReleaser](https://goreleaser.com/) and a logged-in `gh` CLI):
 
 ```bash
 git tag v0.1.0 && git push --tags
-GITHUB_TOKEN=... goreleaser release --clean
-scripts/krew-manifest.sh v0.1.0 > plugins/java4shell.yaml   # update the krew index
+GITHUB_TOKEN=$(gh auth token) goreleaser release --clean
+mkdir -p plugins && scripts/krew-manifest.sh v0.1.0 > plugins/java4shell.yaml
 git add plugins && git commit -m "krew: v0.1.0" && git push
 ```
 
