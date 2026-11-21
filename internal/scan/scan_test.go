@@ -35,7 +35,8 @@ func pod(name, nodeName, image string, opts ...podOpt) corev1.Pod {
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       "lab",
 			Name:            name,
-			OwnerReferences: []metav1.OwnerReference{{Kind: "ReplicaSet", Name: name + "-rs"}},
+			Labels:          map[string]string{"pod-template-hash": "6d4f"},
+			OwnerReferences: []metav1.OwnerReference{{Kind: "ReplicaSet", Name: "web-6d4f", Controller: ptr(true)}},
 		},
 		Spec:   corev1.PodSpec{NodeName: nodeName, Containers: []corev1.Container{{Name: "app", Image: image}}},
 		Status: corev1.PodStatus{Phase: corev1.PodRunning},
@@ -55,6 +56,8 @@ func withEnv(name, value string) podOpt {
 func withNodeSelector(k, v string) podOpt {
 	return func(p *corev1.Pod) { p.Spec.NodeSelector = map[string]string{k: v} }
 }
+
+func ptr[T any](v T) *T { return &v }
 
 func bare() podOpt { return func(p *corev1.Pod) { p.OwnerReferences = nil } }
 
@@ -189,5 +192,66 @@ func TestImageVersion(t *testing.T) {
 		if got := imageVersion(image); got != want {
 			t.Errorf("imageVersion(%q) = %q; want %q", image, got, want)
 		}
+	}
+}
+
+func TestWorkloadOf(t *testing.T) {
+	owned := func(kind, name string, labels map[string]string) *corev1.Pod {
+		p := pod("web-6d4f-x7k2p", "t8i", vulnImage)
+		p.Labels = labels
+		p.OwnerReferences = []metav1.OwnerReference{{Kind: kind, Name: name, Controller: ptr(true)}}
+		return &p
+	}
+	barePod := pod("debug", "t8i", vulnImage, bare())
+	tests := []struct {
+		pod  *corev1.Pod
+		want string
+	}{
+		{owned("ReplicaSet", "web-6d4f", map[string]string{"pod-template-hash": "6d4f"}), "deployment/web"},
+		{owned("ReplicaSet", "standalone", nil), "replicaset/standalone"},
+		{owned("StatefulSet", "db", nil), "statefulset/db"},
+		{owned("DaemonSet", "agent", nil), "daemonset/agent"},
+		{&barePod, "pod/debug"},
+	}
+	for _, tt := range tests {
+		if got := workloadOf(tt.pod); got != tt.want {
+			t.Errorf("workloadOf(%s) = %q; want %q", tt.pod.Name, got, tt.want)
+		}
+	}
+}
+
+// The lab case: one Deployment, one replica per node type.
+func TestGroupByWorkload(t *testing.T) {
+	in := Input{
+		Nodes: []corev1.Node{t8i, t3},
+		Pods: []corev1.Pod{
+			pod("web-6d4f-a", "t8i", vulnImage),
+			pod("web-6d4f-b", "t3", vulnImage),
+			pod("web-6d4f-c", "t3", vulnImage),
+		},
+	}
+	res := Analyze(java4shell(t), in)
+	if len(res.Findings) != 3 || len(res.Workloads) != 1 {
+		t.Fatalf("got %d findings, %d workloads; want 3, 1", len(res.Findings), len(res.Workloads))
+	}
+	w := res.Workloads[0]
+	if w.Name != "deployment/web" || w.Pods != 3 || w.OnFeature != 1 || w.Status != Exposed || w.JDK != "21.0.13" {
+		t.Errorf("workload = %+v", w)
+	}
+	if want := "1 EXPOSED, 2 AT RISK: can be scheduled on a node with avx512vbmi"; w.Note != want {
+		t.Errorf("note = %q; want %q", w.Note, want)
+	}
+	if res.CountWorkloads(Exposed) != 1 || res.Count(Exposed) != 1 || res.Count(AtRisk) != 2 {
+		t.Errorf("counts: workloads exposed=%d, pods exposed=%d at risk=%d",
+			res.CountWorkloads(Exposed), res.Count(Exposed), res.Count(AtRisk))
+	}
+}
+
+func TestJoinValues(t *testing.T) {
+	if got := joinValues([]string{"21.0.13"}, "?"); got != "21.0.13" {
+		t.Errorf("single value: %q", got)
+	}
+	if got := joinValues([]string{"21.0.13", ""}, "?"); got != "21.0.13, ?" {
+		t.Errorf("mixed values: %q", got)
 	}
 }

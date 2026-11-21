@@ -31,6 +31,7 @@ var errExposed = errors.New("exposed containers found")
 type options struct {
 	kube          *genericclioptions.ConfigFlags
 	allNamespaces bool
+	byPod         bool
 	exec          bool
 	output        string
 	ruleFiles     []string
@@ -73,6 +74,7 @@ container for the exact JDK version and the flags the JVM really uses.`,
 		Example: `  kubectl java4shell                 # all namespaces, read-only
   kubectl java4shell -n payments     # one namespace
   kubectl java4shell --exec          # exact JDK version + runtime flags
+  kubectl java4shell --pods          # one row per pod
   kubectl java4shell -o json         # machine-readable`,
 		Version:       version,
 		Args:          cobra.NoArgs,
@@ -87,6 +89,7 @@ container for the exact JDK version and the flags the JVM really uses.`,
 	o.kube.AddFlags(cmd.Flags())
 	cmd.Flags().BoolVarP(&o.allNamespaces, "all-namespaces", "A", false, "scan all namespaces (the default unless -n is set)")
 	cmd.Flags().BoolVar(&o.exec, "exec", false, "run java in each running container for exact JDK version and runtime flags (needs pods/exec)")
+	cmd.Flags().BoolVar(&o.byPod, "pods", false, "one row per pod instead of per workload")
 	cmd.Flags().StringVarP(&o.output, "output", "o", "table", "output format: table or json")
 	cmd.Flags().StringSliceVar(&o.ruleFiles, "rules", nil, "rule YAML file(s) to use instead of the built-in java4shell rule")
 	cmd.Flags().IntVar(&o.concurrency, "concurrency", 8, "parallel execs with --exec")
@@ -144,7 +147,7 @@ func (o *options) run(cmd *cobra.Command) error {
 		in.Probes = scan.ProbeAll(ctx, &scan.KubeProber{Config: config, Client: client}, in.Pods, o.concurrency, o.timeout)
 	}
 
-	rep := report.Report{Mode: mode}
+	rep := report.Report{Mode: mode, ByPod: o.byPod}
 	exposed := 0
 	for _, rule := range ruleSet {
 		res := scan.Analyze(rule, in)

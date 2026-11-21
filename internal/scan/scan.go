@@ -24,7 +24,9 @@ const (
 	NotAffected Status = "NOT AFFECTED" // JDK outside the affected ranges
 )
 
-// severity orders findings in the report, most urgent first.
+// Statuses lists all statuses, most urgent first.
+var Statuses = []Status{Exposed, AtRisk, Mitigated, NotExposed, NotAffected}
+
 var severity = map[Status]int{Exposed: 0, AtRisk: 1, Mitigated: 2, NotExposed: 3, NotAffected: 4}
 
 type Input struct {
@@ -40,6 +42,7 @@ type ContainerRef struct {
 type Finding struct {
 	Namespace  string `json:"namespace"`
 	Pod        string `json:"pod"`
+	Workload   string `json:"workload"` // e.g. deployment/web, or pod/name for bare pods
 	Container  string `json:"container"`
 	Node       string `json:"node"` // "" while pending
 	Image      string `json:"image"`
@@ -62,9 +65,10 @@ func (f Finding) Label() string {
 }
 
 type Result struct {
-	Rule     rules.Rule `json:"rule"`
-	Nodes    []NodeInfo `json:"nodes"`
-	Findings []Finding  `json:"findings"`
+	Rule      rules.Rule `json:"rule"`
+	Nodes     []NodeInfo `json:"nodes"`
+	Workloads []Workload `json:"workloads"`
+	Findings  []Finding  `json:"findings"` // one per pod and container
 }
 
 func (r Result) Count(s Status) int {
@@ -119,6 +123,7 @@ func Analyze(rule rules.Rule, in Input) Result {
 			cmp.Compare(a.Container, b.Container),
 		)
 	})
+	res.Workloads = group(res.Findings)
 	return res
 }
 
@@ -128,6 +133,7 @@ func evaluate(rule rules.Rule, pod *corev1.Pod, c corev1.Container, probes map[C
 	f := Finding{
 		Namespace: pod.Namespace,
 		Pod:       pod.Name,
+		Workload:  workloadOf(pod),
 		Container: c.Name,
 		Node:      pod.Spec.NodeName,
 		Image:     c.Image,

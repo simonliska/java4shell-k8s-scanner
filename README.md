@@ -8,14 +8,13 @@ the ones that ship an affected JDK.
 $ kubectl java4shell
 java4shell (CVE-2026-114938)
 
-NAMESPACE  POD                   NODE            AVX512VBMI  JDK      MITIGATION                STATUS        NOTE
-java-lab   vuln-b8b957858-8kqcf  k3s-server-t8i  yes         21.0.13  -                         EXPOSED
-java-lab   vuln-b8b957858-c56zv  k3s-agent-t3    no          21.0.13  -                         AT RISK       can be scheduled on a node with avx512vbmi
-java-lab   vuln-mitigated-...    k3s-server-t8i  yes         21.0.13  -XX:-UseBASE64Intrinsics  MITIGATED
-java-lab   not-affected-...      k3s-server-t8i  yes         17.0.5   -                         NOT AFFECTED
+NAMESPACE  WORKLOAD                   PODS  ON AVX512VBMI  JDK      MITIGATION                STATUS        NOTE
+java-lab   deployment/vuln            2     1              21.0.13  -                         EXPOSED       1 EXPOSED, 1 AT RISK: can be scheduled on a node with avx512vbmi
+java-lab   deployment/vuln-mitigated  2     1              21.0.13  -XX:-UseBASE64Intrinsics  MITIGATED
+java-lab   deployment/not-affected    2     1              17.0.5   -                         NOT AFFECTED
 
 Nodes: 2 total, 1 with avx512vbmi, 1 without
-Result: 1 EXPOSED, 1 AT RISK, 1 MITIGATED, 1 NOT AFFECTED
+Result: 1 EXPOSED, 1 MITIGATED, 1 NOT AFFECTED (workloads)
 ```
 
 ## Why
@@ -58,9 +57,14 @@ node CPUs show as `?` and pods as AT RISK.
 kubectl java4shell                  # all namespaces, read-only
 kubectl java4shell -n payments      # one namespace
 kubectl java4shell --exec           # exact JDK version and runtime flags
-kubectl java4shell -o json          # JSON output
+kubectl java4shell --pods           # one row per pod instead of per workload
+kubectl java4shell -o json          # JSON output (workloads and pods)
 kubectl java4shell --context prod   # standard kubectl flags work
 ```
+
+Findings are grouped by workload (Deployment, StatefulSet, DaemonSet...), since
+that's where you fix them. A workload shows the worst status of its pods; the
+note says when its pods differ, e.g. one replica on a VBMI node and one not.
 
 Exit code `2` means at least one container is EXPOSED, so CI jobs can fail on it.
 

@@ -14,6 +14,7 @@ import (
 type Report struct {
 	Mode    string        `json:"mode"` // "read-only" or "exec"
 	Results []scan.Result `json:"results"`
+	ByPod   bool          `json:"-"` // table: one row per pod instead of per workload
 }
 
 func JSON(w io.Writer, r Report) error {
@@ -28,11 +29,20 @@ func Table(w io.Writer, r Report) {
 		fmt.Fprintf(w, "%s (%s)\n\n", res.Rule.ID, res.Rule.CVE)
 
 		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-		fmt.Fprintf(tw, "NAMESPACE\tPOD\tNODE\t%s\tJDK\tMITIGATION\tSTATUS\tNOTE\n", strings.ToUpper(feature))
-		for _, f := range res.Findings {
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-				f.Namespace, f.Label(), or(f.Node, "<pending>"), cpu(f.CPU), or(f.JDK, "?"),
-				or(f.Mitigation, "-"), f.Status, f.Note)
+		if r.ByPod {
+			fmt.Fprintf(tw, "NAMESPACE\tPOD\tNODE\t%s\tJDK\tMITIGATION\tSTATUS\tNOTE\n", strings.ToUpper(feature))
+			for _, f := range res.Findings {
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+					f.Namespace, f.Label(), or(f.Node, "<pending>"), cpu(f.CPU), or(f.JDK, "?"),
+					or(f.Mitigation, "-"), f.Status, f.Note)
+			}
+		} else {
+			fmt.Fprintf(tw, "NAMESPACE\tWORKLOAD\tPODS\tON %s\tJDK\tMITIGATION\tSTATUS\tNOTE\n", strings.ToUpper(feature))
+			for _, wl := range res.Workloads {
+				fmt.Fprintf(tw, "%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
+					wl.Namespace, wl.Label(), wl.Pods, wl.OnFeature, or(wl.JDK, "?"),
+					or(wl.Mitigation, "-"), wl.Status, wl.Note)
+			}
 		}
 		tw.Flush()
 
@@ -40,7 +50,7 @@ func Table(w io.Writer, r Report) {
 			fmt.Fprintln(w, "No Java containers found.")
 		}
 		fmt.Fprintf(w, "\nNodes: %s\n", nodeSummary(res.Nodes, feature))
-		fmt.Fprintf(w, "Result: %s\n\n", statusSummary(res))
+		fmt.Fprintf(w, "Result: %s\n\n", statusSummary(res, r.ByPod))
 	}
 
 	if r.Mode == "read-only" {
@@ -60,17 +70,21 @@ func nodeSummary(nodes []scan.NodeInfo, feature string) string {
 	return s
 }
 
-func statusSummary(res scan.Result) string {
+func statusSummary(res scan.Result, byPod bool) string {
+	count, unit := res.CountWorkloads, "workloads"
+	if byPod {
+		count, unit = res.Count, "containers"
+	}
 	var parts []string
-	for _, s := range []scan.Status{scan.Exposed, scan.AtRisk, scan.Mitigated, scan.NotExposed, scan.NotAffected} {
-		if n := res.Count(s); n > 0 {
+	for _, s := range scan.Statuses {
+		if n := count(s); n > 0 {
 			parts = append(parts, fmt.Sprintf("%d %s", n, s))
 		}
 	}
 	if len(parts) == 0 {
 		return "nothing to report"
 	}
-	return strings.Join(parts, ", ")
+	return strings.Join(parts, ", ") + " (" + unit + ")"
 }
 
 func cpu(c scan.CPU) string {
